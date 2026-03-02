@@ -43,9 +43,6 @@
     .color-legend { display: flex; flex-wrap: wrap; gap: 0.7rem 1.5rem; font-size: 0.92rem; margin-bottom: 1rem; }
     .legend-item { display: flex; align-items: center; gap: 0.4rem; }
     .legend-swatch { width: 28px; height: 5px; border-radius: 2px; }
-
-    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ddd;
-             font-size: 0.82rem; color: #666; }
   </style>
 </head>
 <body>
@@ -53,8 +50,7 @@
 <h1>Prosodic ABX — Supplementary Material</h1>
 <p class="subtitle">
   <em>Prosodic ABX: A Language-Agnostic Training-Free Metric of Prosodic Contrast in Speech Representations</em><br>
-  Submitted to Interspeech 2026<br>
-  Dataset: <a href="https://github.com/prosodyabx/prosody-abx-datasets">prosodyabx/prosody-abx-datasets</a>
+  Submitted to Interspeech 2026
 </p>
 
 <!-- ─── Layer-wise ────────────────────────────────────────────────────── -->
@@ -146,11 +142,6 @@
 <p><small>Models ordered best to worst by out-of-context error rate.</small></p>
 <div id="chart-ctx-lw" class="chart"></div>
 
-<footer>
-  Generated from results of the prosodic ABX experiments.
-  See <a href="https://github.com/prosodyabx/prosody-abx-datasets">prosodyabx/prosody-abx-datasets</a> for the dataset and further details.
-</footer>
-
 <script>
 'use strict';
 const D = window.WEBPAGE_DATA;
@@ -213,6 +204,13 @@ function modelsBySize(size) {
 function bestError(taskData, model) {
   const rows = taskData?.[model];
   return rows?.length ? Math.min(...rows.map(r => r.error_rate)) : null;
+}
+
+function bestLayer(taskData, model) {
+  const rows = taskData?.[model];
+  if (!rows?.length) return null;
+  const minErr = Math.min(...rows.map(r => r.error_rate));
+  return rows.find(r => r.error_rate === minErr)?.layer_num ?? null;
 }
 
 function assignDashes(models) {
@@ -323,6 +321,8 @@ function renderRankings(task) {
   models.sort((a, b) => (bestError(taskData, a) ?? 1) - (bestError(taskData, b) ?? 1));
   const vals = models.map(m => ({
     value: +(bestError(taskData, m) * 100).toFixed(2),
+    bestLayer: bestLayer(taskData, m),
+    isBaseline: D.models[m]?.pretrain_lang === 'Baseline',
     itemStyle: { color: modelColor(m) },
   }));
   const human = HUMAN_BASELINES[task];
@@ -331,7 +331,10 @@ function renderRankings(task) {
   getOrInit('chart-rank').setOption({
     animation: false,
     title: { text: `${TASK_LABELS[task]} — Best-Layer Rankings`, left: 'center', textStyle: { fontSize: 18 } },
-    tooltip: { trigger: 'axis', formatter: p => `${p[0]?.name}: ${p[0]?.value}%` },
+    tooltip: { trigger: 'axis', formatter: p => {
+      const d = p[0];
+      return d?.data?.isBaseline ? `${d?.name}: ${d?.value}%` : `${d?.name}: ${d?.value}% (Layer ${d?.data?.bestLayer})`;
+    }},
     grid: { top: 52, bottom: 40, left: 20, right: 80, containLabel: true },
     xAxis: { type: 'value', name: 'Best-Layer Error Rate (%)', nameLocation: 'middle', nameGap: 30,
              nameTextStyle: { fontSize: 15 }, min: 0, max: maxVal, axisLabel: { formatter: '{value}%', fontSize: 15 } },
@@ -339,7 +342,7 @@ function renderRankings(task) {
              axisLabel: { fontSize: 15 }, inverse: true },
     series: [{
       type: 'bar', data: vals,
-      label: { show: true, position: 'right', formatter: p => `${p.value}%`, fontSize: 14 },
+      label: { show: true, position: 'right', formatter: p => p.data.isBaseline ? `${p.value}%` : `${p.value}% (L${p.data.bestLayer})`, fontSize: 14 },
       markLine: human != null ? {
         silent: true,
         lineStyle: { color: '#D55E00', type: 'dashed', width: 2.5 },
